@@ -893,10 +893,9 @@ const CoursesPage: React.FC<CoursesPageProps> = ({
       handleCourseEditCancel();
     }
   };
-
-  // 课程聊天
-  const handleCourseChat = (courseName: string) => {
-    navigate(`/course-chat/${encodeURIComponent(courseName)}`);
+  // 课程聊天 - 统一使用课程ID导航
+  const handleCourseChat = (courseId: number) => {
+    navigate(`/course-chat/${courseId}`);
   };
 
   // 滑动功能
@@ -1117,14 +1116,12 @@ const CoursesPage: React.FC<CoursesPageProps> = ({
                       </div>
                     )}
                   </div>
-                  
-                  <div className="course-chat-section">
+                    <div className="course-chat-section">
                     <button 
                       className="course-chat-btn"
                       onClick={() => {
-                        // 🔥 确保使用课程ID，并且课程ID存在
                         if (course.id) {
-                          navigate(`/course-chat/${course.id}`);
+                          handleCourseChat(course.id);
                         } else {
                           console.error('课程ID不存在:', course);
                           alert('无法启动课程聊天：课程ID缺失');

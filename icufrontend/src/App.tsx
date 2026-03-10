@@ -145,13 +145,13 @@ const AppContent: React.FC = () => {
     setCurrentSessionId(null);
     console.log('App: 切换模型/搜索创建新对话, model:', model, 'search:', searchEnabled);
   };
-
   // 修复：创建新会话函数，确保消息顺序正确
-  const createNewSession = async (firstMessage: string, fileTokens: string[] = [], model?: AIModel): Promise<string> => {
+  const createNewSession = async (firstMessage: string, fileTokens: string[] = [], model?: AIModel, searchEnabled?: boolean): Promise<string> => {
     try {
       console.log('App: 创建新会话，首条消息:', firstMessage);
       console.log('App: 文件tokens:', fileTokens);
       console.log('App: 使用的AI模型:', model);
+      console.log('App: 使用的搜索设置:', searchEnabled);
       
       // 🔥 确保token格式正确
       const validTokens = fileTokens.filter(token => 
@@ -159,13 +159,12 @@ const AppContent: React.FC = () => {
       );
       
       console.log('App: 验证后的tokens:', validTokens);
-      
-      // 🔥 构建创建聊天的数据 - 确保包含所有必需字段
+        // 🔥 构建创建聊天的数据 - 确保包含所有必需字段
       const createChatData = {
         chat_type: 'general' as const,
         first_message: firstMessage.trim(),
         ai_model: model || AIModel.STAR,
-        search_enabled: false,
+        search_enabled: searchEnabled ?? false, // 🔥 修复：使用传入的searchEnabled，不再硬编码false
         context_mode: 'Standard',
         stream: false,
         ...(validTokens.length > 0 && {
@@ -229,8 +228,7 @@ const AppContent: React.FC = () => {
           };
           initialMessages.push(userMessage);
         }
-        
-        const newSession: ChatSession = {
+          const newSession: ChatSession = {
           id: response.chat.id.toString(),
           title: response.chat.title,
           lastMessage: response.ai_message?.content || firstMessage,
@@ -238,7 +236,10 @@ const AppContent: React.FC = () => {
           messages: initialMessages, // 🔥 使用正确排序的消息
           chatType: response.chat.chat_type,
           courseId: response.chat.course_id ?? undefined,
-        };
+          // 🔥 修复模型显示重置：保留实际使用的模型和搜索设置
+          ai_model: model || AIModel.STAR,
+          search_enabled: searchEnabled ?? false,
+        } as any;
         
         setChatSessions(prev => [newSession, ...prev]);
         setCurrentSessionId(newSession.id);
@@ -436,11 +437,9 @@ const AppContent: React.FC = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/api-test" element={<ApiTestPage />} />
         <Route path="/welcome" element={<WelcomePage />} />
-        <Route path="/welcome/:section" element={<WelcomePage />} />
-
-        {/* 课程聊天路由 - 支持 courseId 和 courseName 两种方式 */}
+        <Route path="/welcome/:section" element={<WelcomePage />} />        {/* 课程聊天路由 - 注意：name/:courseName 必须在 :courseId 之前，否则 "name" 会被当作 courseId */}
         <Route
-          path="/course-chat/:courseId"
+          path="/course-chat/name/:courseName"
           element={
             <ProtectedRoute>
               <CourseChat />
@@ -448,7 +447,7 @@ const AppContent: React.FC = () => {
           }
         />
         <Route
-          path="/course-chat/name/:courseName"
+          path="/course-chat/:courseId"
           element={
             <ProtectedRoute>
               <CourseChat />

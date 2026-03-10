@@ -253,8 +253,7 @@ const CourseChat: React.FC = () => {
   const [greeting, setGreeting] = useState('');
   const [courseFiles, setCourseFiles] = useState<CourseFile[]>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  
-  // 🔥 新增：课程文件和文件夹状态
+    // 🔥 新增：课程文件和文件夹状态
   const [courseFolders, setCourseFolders] = useState<any[]>([]);
   const [allFiles, setAllFiles] = useState<any[]>([]);
   const [loadingResources, setLoadingResources] = useState(false);
@@ -263,6 +262,9 @@ const CourseChat: React.FC = () => {
   const [semesters, setSemesters] = useState<any[]>([]);
   const [allCourses, setAllCourses] = useState<any[]>([]);
   const [loadingCourseData, setLoadingCourseData] = useState(false);
+
+  // 🔥 懒加载标志：防止重复加载文件
+  const filesLoadedRef = useRef(false);
   
   // 🔥 添加缺失的滚动相关状态
   const [scrollInfo, setScrollInfo] = useState({ top: 0, height: 0 });
@@ -350,12 +352,16 @@ const CourseChat: React.FC = () => {
       alert(errorText);
     }
   };
-
   // 切换 RAG 面板展开/收起
   const toggleRagPanel = () => {
-    setIsRagPanelExpanded(!isRagPanelExpanded);
-    if (!isRagPanelExpanded) {
+    const willExpand = !isRagPanelExpanded;
+    setIsRagPanelExpanded(willExpand);
+    if (willExpand) {
       setShowFileSelector(true); // 展开时显示文件选择器
+      // 🔥 懒加载：打开 RAG 面板时才加载文件列表
+      if (!filesLoadedRef.current) {
+        loadCourseFiles().then(files => setCourseFiles(files));
+      }
     } else {
       setShowFileSelector(false); // 收起时隐藏文件选择器
     }
@@ -511,50 +517,45 @@ const CourseChat: React.FC = () => {
     const currentCourseName = getCurrentCourseName();
     return t.inputPlaceholder.replace('{courseName}', currentCourseName);
   };
-
-  // 🔥 修改：从真实API获取课程文件数据
+  // 🔥 优化：从真实API并发获取课程文件数据（懒加载，按需调用）
   const loadCourseFiles = async () => {
     if (!courseInfo?.id) {
       console.log('没有课程ID，跳过文件加载。courseInfo:', courseInfo);
       return [];
     }
 
+    // 防止重复加载
+    if (filesLoadedRef.current) {
+      console.log('文件已加载过，跳过重复请求');
+      return courseFiles;
+    }
+
     setLoadingResources(true);
     try {
-      console.log('=== 开始加载课程资源 ===');
+      console.log('=== 开始懒加载课程文件 ===');
       console.log('课程ID:', courseInfo.id);
 
-      // 1. 获取课程文件夹
-      const foldersResponse = await folderAPI.getCourseFolders(courseInfo.id);
-      console.log('课程文件夹:', foldersResponse.folders);
-      setCourseFolders(foldersResponse.folders);
-
-      // 2. 获取所有文件（用于备选）
-      try {
-        const filesResponse = await fileAPI.getFiles();
-        console.log('所有文件:', filesResponse.files);
-        
-        // 过滤出属于当前课程的文件
-        const courseFiles = filesResponse.files.filter(file => 
-          file.course_id === courseInfo.id
-        );
-        setAllFiles(courseFiles);
-        console.log('当前课程文件:', courseFiles);
-      } catch (error) {
-        console.warn('获取文件列表失败:', error);
-        setAllFiles([]);
+      // 1. 获取课程文件夹（如果还没加载）
+      let folders = courseFolders;
+      if (folders.length === 0) {
+        const foldersResponse = await folderAPI.getCourseFolders(courseInfo.id);
+        folders = foldersResponse.folders;
+        setCourseFolders(folders);
       }
 
-      // 3. 构建文件列表用于界面显示
-      const files: CourseFile[] = [];
+      // 2. 并发获取所有文件夹的文件（Promise.all 代替串行 for...of）
+      const folderFileResults = await Promise.allSettled(
+        folders.map(folder => folderAPI.getFolderFiles(folder.id))
+      );
 
-      // 从文件夹中加载文件
-      for (const folder of foldersResponse.folders) {
-        try {
-          const folderFilesResponse = await folderAPI.getFolderFiles(folder.id);
-          console.log(`文件夹 ${folder.name} 的文件:`, folderFilesResponse.files);
-          
-          folderFilesResponse.files.forEach(file => {
+      const files: CourseFile[] = [];
+      const allFlatFiles: any[] = [];
+
+      folderFileResults.forEach((result, index) => {
+        const folder = folders[index];
+        if (result.status === 'fulfilled') {
+          result.value.files.forEach(file => {
+            allFlatFiles.push(file);
             files.push({
               id: file.id.toString(),
               name: file.original_name,
@@ -566,15 +567,15 @@ const CourseChat: React.FC = () => {
               folderType: folder.folder_type
             });
           });
-        } catch (error) {
-          console.warn(`获取文件夹 ${folder.name} 文件失败:`, error);
+        } else {
+          console.warn(`获取文件夹 ${folder.name} 文件失败:`, result.reason);
         }
-      }
+      });
 
-      console.log('=== 课程资源加载完成 ===');
-      console.log('文件夹数量:', foldersResponse.folders.length);
-      console.log('文件数量:', files.length);
+      setAllFiles(allFlatFiles);
+      filesLoadedRef.current = true;
 
+      console.log(`=== 课程文件加载完成: ${files.length} 个文件 ===`);
       return files;
     } catch (error) {
       console.error('加载课程资源失败:', error);
@@ -726,16 +727,19 @@ const CourseChat: React.FC = () => {
       alert('下载文件失败');
     }
   };
-
   // 修改原有的切换文件选择器函数
   const toggleFileSelector = () => {
     if (selectedFiles.length > 0) {
       // 如果已有选择的文件，切换 RAG 面板
       toggleRagPanel();
     } else {
-      // 如果没有选择文件，直接显示文件选择器
-      setShowFileSelector(!showFileSelector);
-      setIsRagPanelExpanded(!showFileSelector);
+      // 如果没有选择文件，直接显示文件选择器并懒加载
+      const willShow = !showFileSelector;
+      setShowFileSelector(willShow);
+      setIsRagPanelExpanded(willShow);
+      if (willShow && !filesLoadedRef.current) {
+        loadCourseFiles().then(files => setCourseFiles(files));
+      }
     }
   };
 
@@ -864,8 +868,7 @@ const CourseChat: React.FC = () => {
       setIsLoading(false);
     }
   };
-
-  // 🔥 修改：当课程信息加载完成后，加载课程文件和初始化聊天
+  // 🔥 修改：当课程信息加载完成后，只加载文件夹列表和聊天历史（文件懒加载）
   useEffect(() => {
     const initializeCourseData = async () => {
       if (!courseInfo || !courseInfo.id) {
@@ -873,14 +876,24 @@ const CourseChat: React.FC = () => {
         return;
       }
       
-      console.log('=== 初始化课程数据 ===');
-      console.log('课程信息完整:', courseInfo);
+      // 课程切换时重置文件加载标志
+      filesLoadedRef.current = false;
+      setCourseFiles([]);
+      setAllFiles([]);
+      setCourseFolders([]);
       
-      // 1. 加载课程文件
-      const files = await loadCourseFiles();
-      setCourseFiles(files);
+      console.log('=== 初始化课程数据（只加载文件夹列表）===');
+
+      // 1. 只加载文件夹列表（轻量，供 createCourseChat 使用）
+      try {
+        const foldersResponse = await folderAPI.getCourseFolders(courseInfo.id);
+        setCourseFolders(foldersResponse.folders);
+        console.log('文件夹列表已加载:', foldersResponse.folders.length, '个');
+      } catch (error) {
+        console.warn('加载文件夹列表失败:', error);
+      }
       
-      // 2. 尝试加载现有的课程聊天
+      // 2. 尝试加载现有的课程聊天（不加载文件，文件在打开 RAG 面板时再加载）
       try {
         const response = await chatAPI.getChats();
         

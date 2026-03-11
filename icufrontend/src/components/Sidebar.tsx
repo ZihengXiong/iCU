@@ -994,23 +994,14 @@ const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* 侧边栏 */}
-      <nav className={`sidebar ${isOpen ? 'sidebar--open' : ''} ${isCollapsed ? 'sidebar--collapsed' : ''}`}>
-        {/* 🔥 隐藏：折叠按钮 */}
-        <button 
-          ref={collapseButtonRef}
-          className="sidebar__collapse-btn"
-          onClick={handleCollapseToggle}
-          onMouseEnter={handleTooltipShow}
-          onMouseLeave={handleTooltipHide}
-          onFocus={handleTooltipShow}
-          onBlur={handleTooltipHide}
-          aria-label={isCollapsed ? t.expandSidebar : t.collapseSidebar}
-          style={{ display: 'none' }} // 🔥 隐藏折叠按钮
+      <nav className={`sidebar ${isOpen ? 'sidebar--open' : ''} ${isCollapsed ? 'sidebar--collapsed' : ''}`}>        {/* 关闭/隐藏侧边栏按钮 */}
+        <button
+          className="sidebar__close-btn"
+          onClick={onToggle}
+          aria-label="Close sidebar"
+          title={language === 'zh_CN' ? '隐藏侧边栏' : 'Hide sidebar'}
         >
-          <div className="sidebar__collapse-icon">
-            <span className={`sidebar__collapse-line ${isCollapsed ? 'sidebar__collapse-line--collapsed' : ''}`}></span>
-            <span className={`sidebar__collapse-line ${isCollapsed ? 'sidebar__collapse-line--collapsed' : ''}`}></span>
-          </div>
+          ‹
         </button>
 
         {/* 侧边栏内容 */}

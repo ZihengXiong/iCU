@@ -29,6 +29,21 @@
   z-index: 1000;
 }
 
+/* 移动端：侧边栏由 layout__sidebar 容器控制位移，自身不需要 fixed 定位 */
+@media (max-width: 767px) {
+  .sidebar {
+    position: relative;
+    transform: none !important;
+    width: 280px;
+    height: 100vh;
+    z-index: auto;
+  }
+
+  .sidebar--open {
+    transform: none !important;
+  }
+}
+
 /* 折叠按钮 - 增强动画效果 */
 .sidebar__collapse-btn {
   position: absolute;
@@ -116,24 +131,9 @@
   transform: translateX(-10px);
 }
 
-/* 移动端遮罩 - 优化动画 */
+/* 移动端遮罩 - 由 Layout 的 overlay 接管，这里全部隐藏 */
 .sidebar-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 999;
-  opacity: 0;
-  animation: overlayFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  backdrop-filter: blur(4px);
-}
-
-@keyframes overlayFadeIn {
-  to {
-    opacity: 1;
-  }
+  display: none;
 }
 
 /* 品牌头部 - 添加微妙动画 */
@@ -804,7 +804,34 @@
   background: #9ca3af;
 }
 
-/* 响应式设计 */
+/* ── 关闭/隐藏侧边栏按钮 ── */
+.sidebar__close-btn {
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  color: #6b7280;
+  z-index: 1002;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.sidebar__close-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+  border-color: #d1d5db;
+}
+
+/* ── 响应式 ── */
 @media (min-width: 768px) {
   .sidebar {
     position: static;
@@ -813,8 +840,11 @@
     height: 100vh;
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
   }
-  
-  .sidebar-overlay {
+}
+
+/* 移动端隐藏关闭按钮（用顶部栏汉堡按钮代替） */
+@media (max-width: 767px) {
+  .sidebar__close-btn {
     display: none;
   }
 }
